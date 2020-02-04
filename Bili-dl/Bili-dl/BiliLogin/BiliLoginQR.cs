@@ -1,4 +1,4 @@
-﻿using Json;
+﻿using JsonUtil;
 using QRCoder;
 using System;
 using System.Drawing;
@@ -89,7 +89,7 @@ namespace BiliLogin
         public BiliLoginQR(Window parent)
         {
             isTimeout = false;
-            if(parent != null)
+            if (parent != null)
                 parent.Closed += Parent_Closed;
         }
 
@@ -129,19 +129,18 @@ namespace BiliLogin
             try
             {
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create("https://passport.bilibili.com/qrcode/getLoginUrl");
-                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                Stream dataStream = response.GetResponseStream();
-                StreamReader reader = new StreamReader(dataStream);
-                string result = reader.ReadToEnd();
-                reader.Close();
-                response.Close();
-                dataStream.Close();
+                string result;
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                    using(Stream stream = response.GetResponseStream())
+                        using(StreamReader reader = new StreamReader(stream))
+                            result = reader.ReadToEnd();
 
-                IJson getLoginUrl = JsonParser.Parse(result);
-                LoginUrlRecieved?.Invoke(this, getLoginUrl.GetValue("data").GetValue("url").ToString());
-                Bitmap qrBitmap = RenderQrCode(getLoginUrl.GetValue("data").GetValue("url").ToString());
+
+                Json.Value getLoginUrl = Json.Parser.Parse(result);
+                LoginUrlRecieved?.Invoke(this, getLoginUrl["data"]["url"]);
+                Bitmap qrBitmap = RenderQrCode(getLoginUrl["data"]["url"]);
                 QRImageLoaded?.Invoke(this, qrBitmap);
-                oauthKey = getLoginUrl.GetValue("data").GetValue("oauthKey").ToString();
+                oauthKey = getLoginUrl["data"]["oauthKey"];
                 return true;
             }
             catch (WebException ex)
@@ -154,7 +153,7 @@ namespace BiliLogin
 
         private void LoginListener()
         {
-            while(!Init())
+            while (!Init())
             {
                 Thread.Sleep(5000);
             }
@@ -168,20 +167,20 @@ namespace BiliLogin
                     request.ContentLength = data.Length;
                     request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
                     request.CookieContainer = new CookieContainer();
-                    Stream postStream = request.GetRequestStream();
-                    postStream.Write(data, 0, data.Length);
-                    HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                    Stream dataStream = response.GetResponseStream();
-                    StreamReader reader = new StreamReader(dataStream);
-                    string result = reader.ReadToEnd();
-                    CookieCollection cookieCollection = response.Cookies;
-                    reader.Close();
-                    response.Close();
-                    dataStream.Close();
-                    postStream.Close();
+                    using(Stream postStream = request.GetRequestStream())
+                        postStream.Write(data, 0, data.Length);
+                    string result;
+                    CookieCollection cookieCollection;
+                    using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                    {
+                        cookieCollection = response.Cookies;
+                        using(Stream stream = response.GetResponseStream())
+                            using (StreamReader reader = new StreamReader(stream))
+                                result = reader.ReadToEnd();
+                    }
 
-                    IJson loginInfo = JsonParser.Parse(result);
-                    if (loginInfo.GetValue("status").ToBool())
+                    Json.Value loginInfo = Json.Parser.Parse(result);
+                    if (loginInfo["status"])
                     {
                         uint uid = 0;
                         foreach (Cookie cookie in cookieCollection)
@@ -194,7 +193,7 @@ namespace BiliLogin
                         LoggedIn?.Invoke(this, cookieCollection, uid);
                         break;
                     }
-                    switch ((int)loginInfo.GetValue("data").ToLong())
+                    switch ((int)loginInfo["data"])
                     {
                         case -2:
                             if (!isTimeout)

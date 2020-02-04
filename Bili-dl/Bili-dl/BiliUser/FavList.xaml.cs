@@ -1,20 +1,12 @@
 ﻿using Bili;
-using Json;
+using JsonUtil;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace BiliUser
 {
@@ -37,6 +29,7 @@ namespace BiliUser
         public FavList()
         {
             InitializeComponent();
+            PagesBox.JumpTo += PagesBox_JumpTo;
         }
 
         private CancellationTokenSource cancellationTokenSource;
@@ -49,55 +42,65 @@ namespace BiliUser
             cancellationTokenSource = new CancellationTokenSource();
             CancellationToken cancellationToken = cancellationTokenSource.Token;
 
-            LoadingPrompt.Visibility = Visibility.Visible;
+            LoadingPromptList.Visibility = Visibility.Visible;
             PagesBox.Visibility = Visibility.Hidden;
 
             Task task = new Task(() =>
             {
-                IJson userinfo = BiliApi.GetJsonResult("https://api.bilibili.com/x/web-interface/nav", null, false);
+                Json.Value userinfo = BiliApi.GetJsonResult("https://api.bilibili.com/x/web-interface/nav", null, false);
                 if (cancellationToken.IsCancellationRequested)
                     return;
-                if (userinfo.GetValue("code").ToLong() == 0)
+                if (userinfo["code"] == 0)
                 {
                     Dictionary<string, string> dic = new Dictionary<string, string>();
-                    dic.Add("mid", userinfo.GetValue("data").GetValue("mid").ToLong().ToString());
-                    IJson json = BiliApi.GetJsonResult("https://api.bilibili.com/x/space/fav/nav", dic, false);
+                    dic.Add("pn", "1");
+                    dic.Add("ps", "100");
+                    dic.Add("up_mid", ((uint)userinfo["data"]["mid"]).ToString());
+                    dic.Add("is_space", "0");
+                    Json.Value json = BiliApi.GetJsonResult("https://api.bilibili.com/medialist/gateway/base/created", dic, false);
                     if (cancellationToken.IsCancellationRequested)
                         return;
-                    if (json.GetValue("code").ToLong() == 0)
+                    if (json["code"] == 0)
                         Dispatcher.Invoke(new Action(() =>
                         {
-                            foreach (IJson folder in json.GetValue("data").GetValue("archive"))
+                            foreach (Json.Value folder in json["data"]["list"])
                             {
-                                FavItem favItem;
-                                if (folder.GetValue("Cover").Contains(0))
-                                    favItem = new FavItem(folder.GetValue("name").ToString(), folder.GetValue("cover").GetValue(0).GetValue("pic").ToString(), folder.GetValue("cur_count").ToLong(), folder.GetValue("media_id").ToLong(), true);
-                                else
-                                    favItem = new FavItem(folder.GetValue("name").ToString(), null, folder.GetValue("cur_count").ToLong(), folder.GetValue("media_id").ToLong(), true);
-                                favItem.PreviewMouseLeftButtonDown += FavItem_PreviewMouseLeftButtonDown;
-                                ContentPanel.Children.Add(favItem);
+                                AddFavFolder(new FavFolder(folder["title"], folder["media_count"], folder["id"]));
                             }
+                            AddFavFolder(new FavFolder(FavFolder.SpecialFolder.ToView));
                         }));
                 }
                 Dispatcher.Invoke(new Action(() =>
                 {
-                    LoadingPrompt.Visibility = Visibility.Hidden;
+                    LoadingPromptList.Visibility = Visibility.Hidden;
                 }));
             });
             task.Start();
         }
 
+        private readonly List<FavFolder> FavFolders = new List<FavFolder>();
+        private void AddFavFolder(FavFolder favFolder)
+        {
+            favFolder.Selected += FavFolder_Selected; ;
+            FavFolders.Add(favFolder);
+            FavFoldersStack.Children.Add(favFolder);
+        }
+
+        private void FavFolder_Selected(FavFolder sender)
+        {
+            foreach (FavFolder f in FavFolders)
+            {
+                f.InActive();
+            }
+
+            sender.Active();
+            ShowFolder(sender.Mid, 1, true);
+        }
+
         private void FavItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             FavItem favItemSender = (FavItem)sender;
-            if (favItemSender.IsFolder)
-            {
-                ShowFolder((int)favItemSender.Id, 1, true);
-            }
-            else
-            {
-                VideoSelected?.Invoke(favItemSender.Title, favItemSender.Id);
-            }
+            VideoSelected?.Invoke(favItemSender.Title, favItemSender.Id);
         }
 
         private int MediaId;
@@ -111,49 +114,101 @@ namespace BiliUser
             cancellationTokenSource = new CancellationTokenSource();
             CancellationToken cancellationToken = cancellationTokenSource.Token;
 
-            LoadingPrompt.Visibility = Visibility.Visible;
+            LoadingPromptFolder.Visibility = Visibility.Visible;
             PagesBox.Visibility = Visibility.Hidden;
 
-            Dictionary<string, string> dic = new Dictionary<string, string>();
-            dic.Add("media_id", mediaId.ToString());
-            dic.Add("pn", pagenum.ToString());
-            dic.Add("ps", "20");
-            dic.Add("keyword", "");
-            dic.Add("order", "mtime");
-            dic.Add("type", "0");
-            dic.Add("tid", "0");
-            dic.Add("jsonp", "jsonp");
-            Task task = new Task(() =>
+            if(mediaId >= 0)
             {
-                IJson json = BiliApi.GetJsonResult("https://api.bilibili.com/medialist/gateway/base/spaceDetail", dic, false);
-                if (cancellationToken.IsCancellationRequested)
-                    return;
-                if (json.GetValue("code").ToLong() == 0)
+                Dictionary<string, string> dic = new Dictionary<string, string>();
+                dic.Add("media_id", mediaId.ToString());
+                dic.Add("pn", pagenum.ToString());
+                dic.Add("ps", "20");
+                dic.Add("keyword", "");
+                dic.Add("order", "mtime");
+                dic.Add("type", "0");
+                dic.Add("tid", "0");
+                dic.Add("jsonp", "jsonp");
+                Task task = new Task(() =>
                 {
+                    Json.Value json = BiliApi.GetJsonResult("https://api.bilibili.com/medialist/gateway/base/spaceDetail", dic, false);
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+                    if (json["code"] == 0)
+                    {
+                        if(json["data"]["info"]["media_count"] > 0)
+                        {
+                            Dispatcher.Invoke(new Action(() =>
+                            {
+                                foreach (Json.Value media in json["data"]["medias"])
+                                {
+                                    FavItem favItem = new FavItem(media["title"], media["cover"], media["fav_time"], media["id"]);
+                                    favItem.PreviewMouseLeftButtonDown += FavItem_PreviewMouseLeftButtonDown;
+                                    ContentPanel.Children.Add(favItem);
+                                }
+                                if (init)
+                                    PagesBox.SetPage((int)Math.Ceiling((double)json["data"]["info"]["media_count"] / 20), 1, true);
+                                PagesBox.Visibility = Visibility.Visible;
+                            }));
+                        }
+                    }
                     Dispatcher.Invoke(new Action(() =>
                     {
-                        foreach (IJson media in json.GetValue("data").GetValue("medias"))
-                        {
-                            FavItem favItem = new FavItem(media.GetValue("title").ToString(), media.GetValue("cover").ToString(), media.GetValue("fav_time").ToLong(), media.GetValue("id").ToLong(), false);
-                            favItem.PreviewMouseLeftButtonDown += FavItem_PreviewMouseLeftButtonDown;
-                            ContentPanel.Children.Add(favItem);
-                        }
-                        if(init)
-                            PagesBox.SetPage((int)Math.Ceiling((double)json.GetValue("data").GetValue("info").GetValue("media_count").ToLong()/20), 1, true);
-                        PagesBox.Visibility = Visibility.Visible;
+                        LoadingPromptFolder.Visibility = Visibility.Hidden;
                     }));
-                }
-                Dispatcher.Invoke(new Action(() =>
+                });
+                task.Start();
+            }
+            else
+            {
+                Task task = new Task(() =>
                 {
-                    LoadingPrompt.Visibility = Visibility.Hidden;
-                }));
-            });
-            task.Start();
+                    Dictionary<string, string> dic = new Dictionary<string, string>();
+                    dic.Add("pn", pagenum.ToString());
+                    dic.Add("ps", "20");
+                    Json.Value json = BiliApi.GetJsonResult("https://api.bilibili.com/x/v2/history/toview/web", dic, false);
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+                    if (json["code"] == 0)
+                    {
+                        Dispatcher.Invoke(new Action(() =>
+                        {
+                            if(json["data"]["count"] > 0)
+                            {
+                                foreach (Json.Value media in json["data"]["list"])
+                                {
+                                    FavItem favItem = new FavItem(media["title"], media["pic"], media["add_at"], media["aid"]);
+                                    favItem.PreviewMouseLeftButtonDown += FavItem_PreviewMouseLeftButtonDown;
+                                    ContentPanel.Children.Add(favItem);
+                                }
+                                if (init)
+                                    PagesBox.SetPage((int)Math.Ceiling((double)json["data"]["count"] / 20), 1, true);
+                                PagesBox.Visibility = Visibility.Visible;
+                            }
+                            
+                        }));
+                    }
+                    Dispatcher.Invoke(new Action(() =>
+                    {
+                        LoadingPromptFolder.Visibility = Visibility.Hidden;
+                    }));
+                });
+                task.Start();
+            }
         }
 
         private void PagesBox_JumpTo(int pagenum)
         {
             ShowFolder(MediaId, pagenum, false);
+        }
+
+        private void FavGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            ((Grid)this.Parent).Children.Remove(this);
+        }
+
+        private void FavPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
         }
     }
 }

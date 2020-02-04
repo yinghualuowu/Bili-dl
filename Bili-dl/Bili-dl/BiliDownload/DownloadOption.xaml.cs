@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ConfigUtil;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -41,8 +42,33 @@ namespace BiliDownload
         /// <param name="isSeason">IsSeason</param>
         public async void ShowParts(string title, uint id, bool isSeason)
         {
+            SetTitle(title);
+            PageList.Items.Clear();
+            QualityList.Items.Clear();
+            PartsLoadingPrompt.Visibility = Visibility.Visible;
+            VideoInfo videoInfo = await VideoInfo.GetInfoAsync(id, isSeason);
+            if (videoInfo != null)
+            {
+                SetTitle(videoInfo.Title);
+                foreach (VideoInfo.Page page in videoInfo.pages)
+                {
+                    TextBlock textBlock = new TextBlock();
+                    textBlock.TextTrimming = TextTrimming.WordEllipsis;
+                    textBlock.Text = string.Format("{0}-{1}", page.Index, page.Part);
+
+                    ListBoxItem listBoxItem = new ListBoxItem();
+                    listBoxItem.Tag = page;
+                    listBoxItem.Content = textBlock;
+                    PageList.Items.Add(listBoxItem);
+                }
+            }
+            PartsLoadingPrompt.Visibility = Visibility.Hidden;
+        }
+
+        private void SetTitle(string title)
+        {
             TitleBox.Inlines.Clear();
-            MatchCollection mc = Regex.Matches(Regex.Unescape(title), "(\\<em.*?\\>(?<Word>.*?)\\</em\\>|.)");
+            MatchCollection mc = Regex.Matches(title, "(\\<em.*?\\>(?<Word>.*?)\\</em\\>|.)");
             foreach (Match m in mc)
             {
                 Inline inline = new Run(m.Value);
@@ -55,26 +81,6 @@ namespace BiliDownload
                     inline = new Run(m.Value);
                 }
                 TitleBox.Inlines.Add(inline);
-            }
-
-            PageList.Items.Clear();
-            QualityList.Items.Clear();
-            PartsLoadingPrompt.Visibility = Visibility.Visible;
-            VideoInfo videoInfo = await VideoInfo.GetInfoAsync(id, isSeason);
-            if (videoInfo != null)
-            {
-                foreach (VideoInfo.Page page in videoInfo.pages)
-                {
-                    TextBlock textBlock = new TextBlock();
-                    textBlock.TextTrimming = TextTrimming.WordEllipsis;
-                    textBlock.Text = string.Format("{0}-{1}", page.Index, Regex.Unescape(page.Part));
-
-                    ListBoxItem listBoxItem = new ListBoxItem();
-                    listBoxItem.Tag = page;
-                    listBoxItem.Content = textBlock;
-                    PageList.Items.Add(listBoxItem);
-                }
-                PartsLoadingPrompt.Visibility = Visibility.Hidden;
             }
         }
 
@@ -98,14 +104,14 @@ namespace BiliDownload
         private void ShowQualies(VideoInfo.Page page)
         {
             List<VideoInfo.Page.Quality> qualities = page.GetQualities();
-            if(qualities != null)
+            if (qualities != null)
                 Dispatcher.Invoke(new Action(() =>
                 {
                     foreach (VideoInfo.Page.Quality quality in qualities)
                     {
                         TextBlock textBlock = new TextBlock();
                         textBlock.TextTrimming = TextTrimming.WordEllipsis;
-                        textBlock.Text = Regex.Unescape(quality.Description);
+                        textBlock.Text = quality.Description;
 
                         ListBoxItem listBoxItem = new ListBoxItem();
                         listBoxItem.Tag = quality;
@@ -120,13 +126,18 @@ namespace BiliDownload
 
         private void QualityListItem_Selected(object sender, RoutedEventArgs e)
         {
-            DownloadTask downloadTask = new DownloadTask(new DownloadInfo(((VideoInfo.Page.Quality)((ListBoxItem)sender).Tag), Bili_dl.SettingPanel.settings.DownloadThreads));
+            DownloadTask downloadTask = new DownloadTask(new DownloadInfo(((VideoInfo.Page.Quality)((ListBoxItem)sender).Tag), ConfigManager.GetSettings().DownloadThreads));
             TaskCreated?.Invoke(downloadTask);
         }
 
-        private void UserControl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void DownloadPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+        }
+
+        private void DownloadOptionGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            ((Grid)this.Parent).Children.Remove(this);
         }
     }
 }

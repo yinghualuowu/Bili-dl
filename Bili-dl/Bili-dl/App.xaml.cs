@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Notifications;
+using System;
+using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -13,22 +15,70 @@ namespace Bili_dl
     {
         public App()
         {
-            this.DispatcherUnhandledException += new DispatcherUnhandledExceptionEventHandler(Application_DispatcherUnhandledException);
-            AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+            this.Resources.Add("Version", "v0.9.0-alpha");
+
+            this.DispatcherUnhandledException += (object sender, DispatcherUnhandledExceptionEventArgs e) =>
+            {
+                Exception ex = e.Exception;
+                MessageBox.Show("An unexpected problem has occourred. \r\nSome operation has been terminated.\r\n\r\n" + string.Format("Captured an unhandled exception：\r\n{0}\r\n\r\nException Message：\r\n{1}\r\n\r\nException StackTrace：\r\n{2}", ex.GetType(), ex.Message, ex.StackTrace), "Some operation has been terminated.", MessageBoxButton.OK, MessageBoxImage.Warning);
+                e.Handled = true;
+            };
+
+            AppDomain.CurrentDomain.UnhandledException += (object sender, UnhandledExceptionEventArgs e) =>
+            {
+                Exception ex = (Exception)e.ExceptionObject;
+                MessageBox.Show("An unexpected and unrecoverable problem has occourred. \r\nThe software will now crash.\r\n\r\n" + string.Format("Captured an unhandled exception：\r\n{0}\r\n\r\nException Message：\r\n{1}\r\n\r\nException StackTrace：\r\n{2}", ex.GetType(), ex.Message, ex.StackTrace), "The software will now crash.", MessageBoxButton.OK, MessageBoxImage.Error);
+            };
         }
 
-        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        protected override void OnStartup(StartupEventArgs e)
         {
-            Exception ex = e.ExceptionObject as Exception;
-            MessageBox.Show("An unexpected and unrecoverable problem has occourred. \r\nThe software will now crash.\r\n\r\n" + string.Format("Captured an unhandled exception：\r\n{0}\r\n\r\nException Message：\r\n{1}\r\n\r\nException StackTrace：\r\n{2}", ex.GetType(), ex.Message, ex.StackTrace), "The software will now crash.", MessageBoxButton.OK, MessageBoxImage.Error);
-            //Environment.Exit(0);
-        }
+            base.OnStartup(e);
 
-        private void Application_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
-        {
-            Exception ex = e.Exception;
-            MessageBox.Show("An unexpected problem has occourred. \r\nSome operation has been terminated.\r\n\r\n" + string.Format("Captured an unhandled exception：\r\n{0}\r\n\r\nException Message：\r\n{1}\r\n\r\nException StackTrace：\r\n{2}", ex.GetType(), ex.Message, ex.StackTrace), "Some operation has been terminated.", MessageBoxButton.OK, MessageBoxImage.Warning);
-            e.Handled = true;
+            if (e.Args.Length == 0)
+            {
+                new MainWindow().Show();
+            }
+            else
+            {
+                switch (e.Args[0].ToLower())
+                {
+                    case "-?":
+                    case "-h":
+                    case "-help":
+                        StringBuilder stringBuilder = new StringBuilder();
+                        stringBuilder.AppendLine("-?\t Help");
+                        stringBuilder.AppendLine("-h\t Help");
+                        stringBuilder.AppendLine("-help\t Help");
+                        stringBuilder.AppendLine("-uninstall\t Uninstall all registered service suppoets of Bili-dl " +
+                                                 " \t\t\t included the Shortcut in Start menu");
+                        MessageBox.Show(stringBuilder.ToString());
+                        Environment.Exit(0);
+                        break;
+                    case "-uninstall":
+                        NotificationManager.Uninstall();
+                        MessageBox.Show("Uninstalled successfully");
+                        Environment.Exit(0);
+                        break;
+                    case "-update":
+                        UpdateUtil.RunUpdate();
+                        Environment.Exit(0);
+                        break;
+                    default:
+                        if (e.Args[0] == NotificationManager.ToastActivatedLaunchArg)
+                        {
+                            ToastHandler.CmdMode = true;
+                            NotificationManager.Activated += ToastHandler.HandleToast;
+                            NotificationManager.Install();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Invalid arguments");
+                            Environment.Exit(0);
+                        }
+                        break;
+                }
+            }
         }
     }
 }

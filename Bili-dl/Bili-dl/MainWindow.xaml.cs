@@ -1,13 +1,17 @@
 ﻿using Bili;
 using BiliDownload;
 using BiliLogin;
+using BiliUser;
 using Framework;
+using Notifications;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Imaging;
 
 namespace Bili_dl
 {
@@ -21,6 +25,8 @@ namespace Bili_dl
         public MainWindow()
         {
             InitializeComponent();
+            SearchBox.VideoSelected += SearchBox_VideoSelected;
+            SearchBox.SeasonSelected += SearchBox_SeasonSelected;
         }
 
         #region Window
@@ -31,24 +37,29 @@ namespace Bili_dl
             IntPtr windowHandle = new WindowInteropHelper(this).Handle;
             WindowLong.SetWindowLong(windowHandle, WindowLong.GWL_STYLE, (WindowLong.GetWindowLong(windowHandle, WindowLong.GWL_STYLE) | WindowLong.WS_CAPTION));
 
+            NotificationManager.Activated += ToastHandler.HandleToast;
+            NotificationManager.Install();
+
             LoadConfig();
+
+            UpdateUtil.NewVersionFound += UpdateUtil_NewVersionFound;
+            UpdateUtil.StartCheckVersion();
         }
 
         private async void LoadConfig()
         {
-            ConfigManager.ConfigManager.Init();
+            ConfigUtil.ConfigManager.Init();
 
-            if (!ConfigManager.ConfigManager.GetStatementConfirmed())
-                StatementGrid.Visibility = Visibility.Visible;
+            if (!ConfigUtil.ConfigManager.GetStatementConfirmed())
+                StatementGrid.Children.Add(new Statement());
 
-            BiliApi.CookieCollection = ConfigManager.ConfigManager.GetCookieCollection();
-            SettingsBox.SetSettings(ConfigManager.ConfigManager.GetSettings());
+            BiliApi.CookieCollection = ConfigUtil.ConfigManager.GetCookieCollection();
 
-            List<DownloadInfo> infos = ConfigManager.ConfigManager.GetDownloadInfos();
+            List<DownloadInfo> infos = ConfigUtil.ConfigManager.GetDownloadInfos();
             foreach (DownloadInfo info in infos)
-                DownloadQueuePanel.Append(new DownloadTask(info));
+                DownloadManager.Append(new DownloadTask(info));
 
-            Search.SetHistory(ConfigManager.ConfigManager.GetSearchHistory());
+            SearchBox.SetHistory(ConfigUtil.ConfigManager.GetSearchHistory());
 
             if (BiliApi.CookieCollection != null)
             {
@@ -58,7 +69,7 @@ namespace Bili_dl
                     ShowUserInfo(userInfo);
                     LoginBtn.Content = "登出";
                 }
-            }    
+            }
         }
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -107,7 +118,7 @@ namespace Bili_dl
 
         private void LoginBtn_Click(object sender, RoutedEventArgs e)
         {
-            if(LoginBtn.Content.ToString() == "登录")
+            if (LoginBtn.Content.ToString() == "登录")
             {
                 MoblieLoginWindow moblieLoginWindow = new MoblieLoginWindow(this);
                 moblieLoginWindow.LoggedIn += MoblieLoginWindow_LoggedIn;
@@ -115,16 +126,16 @@ namespace Bili_dl
                 moblieLoginWindow.Show();
                 LoginBtn.Content = "登录中...";
             }
-            else if(LoginBtn.Content.ToString() == "登出")
+            else if (LoginBtn.Content.ToString() == "登出")
             {
                 BiliApi.CookieCollection = null;
-                ConfigManager.ConfigManager.SetCookieCollection(null);
+                ConfigUtil.ConfigManager.SetCookieCollection(null);
                 UserInfoBox.Text = string.Empty;
                 UserFaceImage.Source = null;
                 ShowFavoritesBtn.Visibility = Visibility.Collapsed;
                 LoginBtn.Content = "登录";
             }
-            
+
         }
 
         private void MoblieLoginWindow_Canceled(MoblieLoginWindow sender)
@@ -140,21 +151,21 @@ namespace Bili_dl
                 sender.Hide();
 
                 BiliApi.CookieCollection = cookies;
-                ConfigManager.ConfigManager.SetCookieCollection(cookies);
+                ConfigUtil.ConfigManager.SetCookieCollection(cookies);
 
                 UserInfo userInfo = await UserInfo.GetUserInfoAsync(BiliApi.CookieCollection);
 
-                if(userInfo != null)
+                if (userInfo != null)
                 {
                     ShowUserInfo(userInfo);
                     LoginBtn.Content = "登出";
                 }
                 sender.Close();
-                
+
             }));
         }
 
-        private async void ShowUserInfo(UserInfo userInfo)
+        private void ShowUserInfo(UserInfo userInfo)
         {
             ShowFavoritesBtn.Visibility = Visibility.Visible;
 
@@ -165,33 +176,25 @@ namespace Bili_dl
                 stringBuilder.Append(" [大会员]");
             UserInfoBox.Text = stringBuilder.ToString();
 
-            UserFaceImage.Source = BiliApi.BitmapToImageSource(await userInfo.GetFaceBitmapAsync());
+            UserFaceImage.Source = new BitmapImage(new Uri(userInfo.Face));
         }
 
         #endregion
 
         #region DownloadOption
 
-        private void ResultBox_VideoSelected(string title, long id)
+        private DownloadOption ShowDownloadOption()
         {
-            DownloadOptionPanel.ShowParts(title, (uint)id, false);
-            DownloadOptionPanel.Visibility = Visibility.Visible;
+            PopupGrid.Children.Clear();
+            DownloadOption downloadOption = new DownloadOption();
+            downloadOption.TaskCreated += DownloadOption_TaskCreated;
+            PopupGrid.Children.Add(downloadOption);
+            return downloadOption;
         }
 
-        private void ResultBox_SeasonSelected(string title, long id)
+        private void DownloadOption_TaskCreated(DownloadTask downloadTask)
         {
-            DownloadOptionPanel.ShowParts(title, (uint)id, true);
-            DownloadOptionPanel.Visibility = Visibility.Visible;
-        }
-
-        private void DownloadOptionGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            DownloadOptionPanel.Visibility = Visibility.Hidden;
-        }
-
-        private void DownloadOptionPanel_TaskCreated(DownloadTask downloadTask)
-        {
-            if (DownloadQueuePanel.Append(downloadTask))
+            if (DownloadManager.Append(downloadTask))
             {
                 Prompt.Text = "已添加到下载队列";
                 ((System.Windows.Media.Animation.Storyboard)Resources["ShowPrompt"]).Begin();
@@ -203,23 +206,26 @@ namespace Bili_dl
             }
         }
 
+        private void SearchBox_VideoSelected(string title, long id)
+        {
+            DownloadOption downloadOption = ShowDownloadOption();
+            downloadOption.ShowParts(title, (uint)id, false);
+        }
+
+        private void SearchBox_SeasonSelected(string title, long id)
+        {
+            DownloadOption downloadOption = ShowDownloadOption();
+            downloadOption.ShowParts(title, (uint)id, true);
+        }
+
         #endregion
 
         #region DownloadQueue
 
         private void ShowQueueBtn_Click(object sender, RoutedEventArgs e)
         {
-            if(DownloadQueuePanel.Visibility == Visibility.Visible)
-            {
-                DownloadQueuePanel.Visibility = Visibility.Hidden;
-                return;
-            }
-            DownloadQueuePanel.Visibility = Visibility.Visible;
-        }
-
-        private void DownloadQueueGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            DownloadQueuePanel.Visibility = Visibility.Hidden;
+            PannelGrid.Children.Clear();
+            PannelGrid.Children.Add(new DownloadQueue());
         }
 
         #endregion
@@ -228,17 +234,8 @@ namespace Bili_dl
 
         private void ShowSettingsBtn_Click(object sender, RoutedEventArgs e)
         {
-            if(SettingsBox.Visibility == Visibility.Visible)
-            {
-                SettingsBox.Visibility = Visibility.Hidden;
-                return;
-            }
-            SettingsBox.Visibility = Visibility.Visible;
-        }
-
-        private void SettingsGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            SettingsBox.Visibility = Visibility.Hidden;
+            PannelGrid.Children.Clear();
+            PannelGrid.Children.Add(new SettingPanel());
         }
 
         #endregion
@@ -247,15 +244,17 @@ namespace Bili_dl
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            UpdatePromptBox.StopCheckVersion();
-            DownloadQueuePanel.StopAll();
-            SettingPanel.Settings settings = ConfigManager.ConfigManager.GetSettings();
+            DownloadFinishedNotification.DisposeNotifyIcon();
+            NotificationManager.Close();
+            UpdateUtil.StopCheckVersion();
+            DownloadManager.StopAll();
+            SettingPanel.Settings settings = ConfigUtil.ConfigManager.GetSettings();
             if (settings.MovedTempPath != null && settings.MovedTempPath != settings.TempPath)
             {
                 CopyDirectory(settings.TempPath, settings.MovedTempPath);
                 settings.TempPath = settings.MovedTempPath;
                 settings.MovedTempPath = null;
-                ConfigManager.ConfigManager.SetSettings(settings);
+                ConfigUtil.ConfigManager.SetSettings(settings);
             }
         }
 
@@ -271,7 +270,7 @@ namespace Bili_dl
                 {
                     System.IO.File.Copy(fsi.FullName, destName, true);
                     System.IO.File.Delete(fsi.FullName);
-                } 
+                }
                 else
                 {
                     System.IO.Directory.CreateDirectory(destName);
@@ -287,7 +286,7 @@ namespace Bili_dl
 
         private void StatementConfirmChk_Checked(object sender, RoutedEventArgs e)
         {
-            ConfigManager.ConfigManager.ConfirmStatement();
+            ConfigUtil.ConfigManager.ConfirmStatement();
             StatementGrid.Visibility = Visibility.Hidden;
         }
 
@@ -295,7 +294,17 @@ namespace Bili_dl
 
         #region Update
 
-        private void UpdatePromptBox_Confirmed(bool IsUpdate)
+        private void UpdateUtil_NewVersionFound(string description)
+        {
+            Dispatcher.Invoke(new Action(() =>
+            {
+                UpdatePrompt updatePrompt = new UpdatePrompt(description);
+                updatePrompt.Confirmed += UpdatePrompt_Confirmed;
+                UpdateGrid.Children.Add(updatePrompt);
+            }));
+        }
+
+        private void UpdatePrompt_Confirmed(bool IsUpdate)
         {
             if (IsUpdate)
                 this.Close();
@@ -307,24 +316,17 @@ namespace Bili_dl
 
         private void ShowFavoritesBtn_Click(object sender, RoutedEventArgs e)
         {
-            if(FavListBox.Visibility == Visibility.Visible)
-            {
-                FavListBox.Visibility = Visibility.Hidden;
-                return;
-            }
-            FavListBox.LoadAsync();
-            FavListBox.Visibility = Visibility.Visible;
+            PannelGrid.Children.Clear();
+            FavList favList = new FavList();
+            favList.VideoSelected += FavList_VideoSelected;
+            favList.LoadAsync();
+            PannelGrid.Children.Add(favList);
         }
 
-        private void FavListBox_VideoSelected(string title, long id)
+        private void FavList_VideoSelected(string title, long id)
         {
-            DownloadOptionPanel.ShowParts(title, (uint)id, false);
-            DownloadOptionPanel.Visibility = Visibility.Visible;
-        }
-
-        private void FavGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            FavListBox.Visibility = Visibility.Hidden;
+            DownloadOption downloadOption = ShowDownloadOption();
+            downloadOption.ShowParts(title, (uint)id, false);
         }
 
         #endregion

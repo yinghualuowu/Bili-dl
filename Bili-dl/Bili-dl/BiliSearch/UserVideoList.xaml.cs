@@ -1,20 +1,12 @@
 ﻿using Bili;
-using Json;
+using JsonUtil;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace BiliSearch
 {
@@ -63,10 +55,10 @@ namespace BiliSearch
                 dic.Add("page", page.ToString());
                 try
                 {
-                    IJson json = BiliApi.GetJsonResult("https://space.bilibili.com/ajax/member/getSubmitVideos", dic, true);
+                    Json.Value json = BiliApi.GetJsonResult("https://space.bilibili.com/ajax/member/getSubmitVideos", dic, true);
                     Dispatcher.Invoke(new Action(() =>
                     {
-                        foreach (IJson v in json.GetValue("data").GetValue("vlist"))
+                        foreach (Json.Value v in json["data"]["vlist"])
                         {
                             ResultBox.Video video = new ResultBox.Video(v);
                             ResultVideo resultVideo = new ResultVideo(video);
@@ -75,7 +67,7 @@ namespace BiliSearch
                         }
                         if (init)
                         {
-                            PagesBox.SetPage((int)json.GetValue("data").GetValue("pages").ToLong(), 1, true);
+                            PagesBox.SetPage(json["data"]["pages"], 1, true);
                         }
                         PagesBox.Visibility = Visibility.Visible;
                         LoadingPrompt.Visibility = Visibility.Hidden;

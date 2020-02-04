@@ -36,10 +36,15 @@
   <PropertyGroup>
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
   <ItemGroup>
+    <Reference Include="ReachFramework" />
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Printing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.CSharp" />
@@ -50,6 +55,14 @@
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
+    <Reference Include="Windows">
+      <HintPath>Windows Kits\10\UnionMetadata\Facade\Windows.WinMD</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Windows.Foundation.UniversalApiContract">
+      <HintPath>Windows Kits\10\References\10.0.17763.0\Windows.Foundation.UniversalApiContract\7.0.0.0\Windows.Foundation.UniversalApiContract.winmd</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
@@ -59,8 +72,13 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="BiliApi.cs" />
+    <Compile Include="BiliUser\FavFolder.xaml.cs">
+      <DependentUpon>FavFolder.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Common\BiliApi.cs" />
+    <Compile Include="BiliDownload\DownloadFinishedNotification.cs" />
     <Compile Include="BiliDownload\DownloadInfo.cs" />
+    <Compile Include="BiliDownload\DownloadManager.cs" />
     <Compile Include="BiliDownload\DownloadOption.xaml.cs">
       <DependentUpon>DownloadOption.xaml</DependentUpon>
     </Compile>
@@ -71,7 +89,8 @@
       <DependentUpon>DownloadQueueItem.xaml</DependentUpon>
     </Compile>
     <Compile Include="BiliDownload\DownloadTask.cs" />
-    <Compile Include="BiliDownload\Flv.cs" />
+    <Compile Include="BiliDownload\FlvMerge\FlvFile.cs" />
+    <Compile Include="BiliDownload\FlvMerge\FlvUtil.cs" />
     <Compile Include="BiliDownload\VideoInfo.cs" />
     <Compile Include="BiliLogin\BiliLoginQR.cs" />
     <Compile Include="BiliLogin\MoblieLoginWindow.xaml.cs">
@@ -127,22 +146,32 @@
     <Compile Include="BiliUser\FavList.xaml.cs">
       <DependentUpon>FavList.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ConfigManager.cs" />
+    <Compile Include="Common\ConfigManager.cs" />
+    <Compile Include="Common\PrintingPreview\NumberBox.xaml.cs">
+      <DependentUpon>NumberBox.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Common\PrintingPreview\PrintingPreviewWindow.xaml.cs">
+      <DependentUpon>PrintingPreviewWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Common\Statement.xaml.cs">
+      <DependentUpon>Statement.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Framework\HitTest.cs" />
     <Compile Include="Framework\Screen.cs" />
     <Compile Include="Framework\WindowLong.cs" />
-    <Compile Include="Json\IJson.cs" />
-    <Compile Include="Json\JsonArray.cs" />
-    <Compile Include="Json\JsonObject.cs" />
-    <Compile Include="Json\JsonParser.cs" />
-    <Compile Include="Json\JsonValue.cs" />
-    <Compile Include="SettingPanel.xaml.cs">
+    <Compile Include="Common\JsonUtil.cs" />
+    <Compile Include="Notifications\NotificationManager.cs" />
+    <Compile Include="Notifications\Shell\ShellLink.cs" />
+    <Compile Include="Notifications\Shell\Shortcut.cs" />
+    <Compile Include="Common\SettingPanel.xaml.cs">
       <DependentUpon>SettingPanel.xaml</DependentUpon>
     </Compile>
-    <Compile Include="UpdatePrompt.xaml.cs">
+    <Compile Include="Notifications\ToastHandler.cs" />
+    <Compile Include="Update\UpdatePrompt.xaml.cs">
       <DependentUpon>UpdatePrompt.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ValueConverters.cs" />
+    <Compile Include="Common\ValueConverters.cs" />
+    <Compile Include="Update\UpdateUtil.cs" />
     <Compile Include="WpfAnimatedGif\AnimationCache.cs" />
     <Compile Include="WpfAnimatedGif\Decoding\GifApplicationExtension.cs" />
     <Compile Include="WpfAnimatedGif\Decoding\GifBlock.cs" />
@@ -231,11 +260,35 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="BiliUser\FavFolder.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="BiliUser\FavItem.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="BiliUser\FavList.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Common\PrintingPreview\NumberBox.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Common\PrintingPreview\PageSizes_en_US.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Common\PrintingPreview\PrintingPreviewWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Common\Statement.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Common\StatementDocument.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -251,11 +304,11 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
-    <Page Include="SettingPanel.xaml">
+    <Page Include="Common\SettingPanel.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="UpdatePrompt.xaml">
+    <Page Include="Update\UpdatePrompt.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -278,10 +331,13 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <None Include="app.manifest" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
+    <None Include="Windows Kits\10\References\10.0.17763.0\Windows.Foundation.UniversalApiContract\7.0.0.0\Windows.Foundation.UniversalApiContract.winmd" />
+    <None Include="Windows Kits\10\UnionMetadata\Facade\Windows.WinMD" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -312,13 +368,16 @@
     <Resource Include="BiliUser\img\img_loading.png" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Updater\Bili-dl-updater.exe" />
+    <Resource Include="Updater\Bili-dl-updater.exe" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="BiliUser\img\loading.gif" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="BiliSearch\img\no_more.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="BiliDownload\DownloadFinishedToast.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

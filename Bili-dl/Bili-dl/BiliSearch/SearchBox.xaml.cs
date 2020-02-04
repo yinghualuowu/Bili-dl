@@ -1,10 +1,9 @@
 ﻿using Bili;
-using Json;
+using JsonUtil;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -46,7 +45,7 @@ namespace BiliSearch
         }
         private void SuggestDelayChanged(object sender, EventArgs e)
         {
-            
+
         }
 
         public string Text
@@ -83,28 +82,23 @@ namespace BiliSearch
             public string Area;
             public string Label;
 
-            public SeasonSuggest(IJson item)
+            public SeasonSuggest(Json.Value item)
             {
-                Position = (uint)(item.GetValue("position").ToLong());
+                Position = item["position"];
                 if (item.Contains("title"))
-                    Title = item.GetValue("title").ToString();
+                    Title = item["title"];
                 else
                     Title = null;
-                Keyword = item.GetValue("keyword").ToString();
-                Cover = Regex.Unescape("https:" + item.GetValue("Cover").ToString());
-                Uri = Regex.Unescape(item.GetValue("uri").ToString());
-                Ptime = item.GetValue("ptime").ToLong();
-                SeasonTypeName = item.GetValue("season_type_name").ToString();
-                Area = item.GetValue("area").ToString();
+                Keyword = item["keyword"];
+                Cover = "https:" + item["cover"];
+                Uri = item["uri"];
+                Ptime = item["ptime"];
+                SeasonTypeName = item["season_type_name"];
+                Area = item["area"];
                 if (item.Contains("label"))
-                    Label = item.GetValue("label").ToString();
+                    Label = item["label"];
                 else
                     Label = null;
-            }
-
-            public Task<System.Drawing.Bitmap> GetCoverAsync()
-            {
-                return BiliApi.GetImageAsync(Cover);
             }
         }
 
@@ -121,21 +115,16 @@ namespace BiliSearch
             public long Fans;
             public long Archives;
 
-            public UserSuggest(IJson item)
+            public UserSuggest(Json.Value item)
             {
-                Position = (uint)item.GetValue("position").ToLong();
-                Title = item.GetValue("title").ToString();
-                Keyword = item.GetValue("keyword").ToString();
-                Cover = Regex.Unescape("https:" + item.GetValue("Cover").ToString());
-                Uri = Regex.Unescape(item.GetValue("uri").ToString());
-                Level = (uint)item.GetValue("level").ToLong();
-                Fans = item.GetValue("fans").ToLong();
-                Archives = item.GetValue("archives").ToLong();
-            }
-
-            public Task<System.Drawing.Bitmap> GetCoverAsync()
-            {
-                return BiliApi.GetImageAsync(Cover);
+                Position = item["position"];
+                Title = item["title"];
+                Keyword = item["keyword"];
+                Cover = "https:" + item["cover"];
+                Uri = item["uri"];
+                Level = item["level"];
+                Fans = item["fans"];
+                Archives = item["archives"];
             }
         }
 
@@ -156,31 +145,31 @@ namespace BiliSearch
 
             }
 
-            public Suggest(IJson item)
+            public Suggest(Json.Value item)
             {
-                Position = (uint)item.GetValue("position").ToLong();
+                Position = item["position"];
 
                 if (item.Contains("title"))
-                    Title = item.GetValue("title").ToString();
+                    Title = item["title"];
                 else
                     Title = null;
 
-                Keyword = item.GetValue("keyword").ToString();
+                Keyword = item["keyword"];
 
                 if (item.Contains("sug_type"))
-                    Type = item.GetValue("sug_type").ToString();
+                    Type = item["sug_type"];
                 else
                     Type = null;
             }
         }
 
-        private async void InputBox_TextChanged(object sender, TextChangedEventArgs e)
+        private async void InputBox_KeyUp(object sender, KeyEventArgs e)
         {
             if (this.IsInitialized && InputBox.IsFocused)
             {
                 List<Suggest> suggests = null;
                 suggests = await GetSuggestAsync(InputBox.Text, SuggestDelay);
-                
+
                 SuggestList.Items.Clear();
                 if (suggests != null)
                 {
@@ -192,19 +181,19 @@ namespace BiliSearch
                         if (suggest.GetType() == typeof(Suggest))
                         {
                             listBoxItem.Content = new SuggestItem(suggest);
-                            listBoxItem.Tag = Regex.Unescape(suggest.Keyword);
+                            listBoxItem.Tag = suggest.Keyword;
                         }
                         else if (suggest.GetType() == typeof(SeasonSuggest))
                         {
                             SeasonSuggest seasonSuggest = (SeasonSuggest)suggest;
                             listBoxItem.Content = new SuggestItemSeason(seasonSuggest);
-                            listBoxItem.Tag = Regex.Unescape(seasonSuggest.Keyword);
+                            listBoxItem.Tag = seasonSuggest.Keyword;
                         }
                         else if (suggest.GetType() == typeof(UserSuggest))
                         {
                             UserSuggest userSuggest = (UserSuggest)suggest;
                             listBoxItem.Content = new SuggestItemUser(userSuggest);
-                            listBoxItem.Tag = Regex.Unescape(userSuggest.Keyword);
+                            listBoxItem.Tag = userSuggest.Keyword;
                         }
                         SuggestList.Items.Add(listBoxItem);
                     }
@@ -219,9 +208,9 @@ namespace BiliSearch
         private CancellationTokenSource cancellationTokenSource;
         private Task<List<Suggest>> GetSuggestAsync(string text, int delay)
         {
-            if(cancellationTokenSource != null)
+            if (cancellationTokenSource != null)
                 cancellationTokenSource.Cancel();
-                
+
             cancellationTokenSource = new CancellationTokenSource();
             CancellationToken cancellationToken = cancellationTokenSource.Token;
             Task<List<Suggest>> task = new Task<List<Suggest>>(() =>
@@ -247,24 +236,24 @@ namespace BiliSearch
             dic.Add("keyword", text);
             try
             {
-                IJson json = BiliApi.GetJsonResult("https://app.bilibili.com/x/v2/search/suggest3", dic, true);
+                Json.Value json = BiliApi.GetJsonResult("https://app.bilibili.com/x/v2/search/suggest3", dic, true);
 
-                if (json.GetValue("data").Contains("list"))
+                if (json["data"].Contains("list"))
                 {
                     List<Suggest> suggests = new List<Suggest>();
-                    foreach (IJson i in json.GetValue("data").GetValue("list"))
+                    foreach (Json.Value i in json["data"]["list"])
                     {
                         if (!i.Contains("sug_type"))
                         {
                             Suggest suggest = new Suggest(i);
                             suggests.Add(suggest);
                         }
-                        else if (i.GetValue("sug_type").ToString() == "pgc")
+                        else if (i["sug_type"] == "pgc")
                         {
                             SeasonSuggest seasonSuggest = new SeasonSuggest(i);
                             suggests.Add(seasonSuggest);
                         }
-                        else if (i.GetValue("sug_type").ToString() == "user")
+                        else if (i["sug_type"] == "user")
                         {
                             UserSuggest userSuggest = new UserSuggest(i);
                             suggests.Add(userSuggest);
@@ -284,7 +273,7 @@ namespace BiliSearch
             {
                 return null;
             }
-            
+
 
         }
 
@@ -296,7 +285,7 @@ namespace BiliSearch
                 SuggestList.SelectedIndex = 0;
                 e.Handled = true;
             }
-            else if(e.Key == Key.Enter)
+            else if (e.Key == Key.Enter)
             {
                 Confirm();
                 e.Handled = true;
@@ -307,11 +296,11 @@ namespace BiliSearch
         {
             if (e.Key == Key.Down)
             {
-                if(SuggestList.SelectedIndex < SuggestList.Items.Count - 1)
+                if (SuggestList.SelectedIndex < SuggestList.Items.Count - 1)
                     SuggestList.SelectedIndex++;
                 e.Handled = true;
             }
-            else if(e.Key == Key.Up)
+            else if (e.Key == Key.Up)
             {
                 SuggestList.SelectedIndex--;
                 if (SuggestList.SelectedIndex == -1)

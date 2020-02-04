@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ConfigUtil;
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -14,29 +15,33 @@ namespace BiliDownload
     public partial class DownloadQueue : UserControl
     {
         private Dictionary<DownloadQueueItem, ListBoxItem> ItemMap;
+
         public DownloadQueue()
         {
             InitializeComponent();
             ItemMap = new Dictionary<DownloadQueueItem, ListBoxItem>();
+
+            DownloadManager.Appended += DownloadManager_Appended;
+            foreach(DownloadTask downloadTask in DownloadManager.TaskList)
+            {
+                Append(downloadTask);
+            }
         }
 
-        /// <summary>
-        /// Append a DownloadTask into the queue.
-        /// </summary>
-        /// <param name="downloadTask">DownloadTask</param>
-        /// <returns>Successful</returns>
-        public bool Append(DownloadTask downloadTask)
+        private void DownloadManager_Appended(DownloadTask downloadTask)
         {
-            foreach(ListBoxItem i in QueueList.Items)
+            Append(downloadTask);
+        }
+
+        private void Append(DownloadTask downloadTask)
+        {
+            foreach (ListBoxItem i in QueueList.Items)
             {
                 DownloadQueueItem dqi = (DownloadQueueItem)i.Content;
-                if(dqi.downloadTask.Aid == downloadTask.Aid &&
+                if (dqi.downloadTask.Aid == downloadTask.Aid &&
                     dqi.downloadTask.Cid == downloadTask.Cid &&
                     dqi.downloadTask.Qn == downloadTask.Qn)
-                {
-                    return false;
-                }
-
+                    return;
             }
             DownloadQueueItem downloadQueueItem = new DownloadQueueItem(downloadTask);
             downloadQueueItem.Finished += DownloadQueueItem_Finished;
@@ -45,20 +50,13 @@ namespace BiliDownload
             listBoxItem.Content = downloadQueueItem;
             QueueList.Items.Add(listBoxItem);
             ItemMap.Add(downloadQueueItem, listBoxItem);
-            if (!((DownloadQueueItem)((ListBoxItem)QueueList.Items[0]).Content).IsRunning)
-                ((DownloadQueueItem)((ListBoxItem)QueueList.Items[0]).Content).Start();
-
-            ConfigManager.ConfigManager.AppendDownloadInfo(downloadTask.Info);
-            return true;
         }
 
         private void DownloadQueueItem_Remove(DownloadQueueItem downloadQueueItem)
         {
+            DownloadManager.Remove(downloadQueueItem.downloadTask);
             QueueList.Items.Remove(ItemMap[downloadQueueItem]);
             ItemMap.Remove(downloadQueueItem);
-            if (QueueList.Items.Count > 0 && !((DownloadQueueItem)((ListBoxItem)QueueList.Items[0]).Content).IsRunning)
-                ((DownloadQueueItem)((ListBoxItem)QueueList.Items[0]).Content).Start();
-            ConfigManager.ConfigManager.RemoveDownloadInfo(downloadQueueItem.downloadTask.Info);
         }
 
         private void DownloadQueueItem_Finished(DownloadQueueItem downloadQueueItem)
@@ -67,27 +65,22 @@ namespace BiliDownload
             {
                 QueueList.Items.Remove(ItemMap[downloadQueueItem]);
                 ItemMap.Remove(downloadQueueItem);
-                if(QueueList.Items.Count > 0)
-                    ((DownloadQueueItem)((ListBoxItem)QueueList.Items[0]).Content).Start();
             }));
-            ConfigManager.ConfigManager.RemoveDownloadInfo(downloadQueueItem.downloadTask.Info);
-        }
-
-        private void UserControl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-        }
-
-        public void StopAll()
-        {
-            foreach(ListBoxItem listBoxItem in QueueList.Items)
-                if(((DownloadQueueItem)listBoxItem.Content).downloadTask.IsRunning)
-                    ((DownloadQueueItem)listBoxItem.Content).downloadTask.Stop();
         }
 
         private void OpenDownloadDirectoryBtn_Click(object sender, RoutedEventArgs e)
         {
-            System.Diagnostics.Process.Start("explorer", Bili_dl.SettingPanel.settings.DownloadPath);
+            System.Diagnostics.Process.Start(string.Format("\"{0}\"", ConfigManager.GetSettings().DownloadPath + "\\"));
+        }
+
+        private void QueuePanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+        }
+
+        private void DownloadQueueGrid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            ((Grid)this.Parent).Children.Remove(this);
         }
     }
 }
